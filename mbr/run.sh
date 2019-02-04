@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DEP="qemu-system-x86_64 qemu-img kvm"
+DEP="qemu-system-x86_64 qemu-img"
 
 if ! which $DEP >/dev/null; then
 	echo "Missing required packages."
