@@ -22,11 +22,11 @@
 use16				; 16-bit code
 org 0x7c00			; the address that BIOS loads MBR
 
-	mov [0x8004],dl ; save boot drive number
+	mov [0x8004],dl		; save boot drive number
 
 	xor eax,eax
 	mov sp,ax		; base of stack memory
-	mov ax,0x8000	; start of stack memory
+	mov ax,0x8000		; start of stack memory
 	mov ss,ax
 
 
@@ -54,7 +54,7 @@ read_commnad:
 	jmp .read_char
 	.is_full:
 	cmp bx,16
-	je .read_char	; buffer is full
+	je .read_char		; buffer is full
 	cmp al,0dh		; Enter key
 	je .done
 	mov [0x7e00+bx],al
@@ -160,9 +160,9 @@ print_byte_hex:
 	; prints AL value to TTY in hex format
 	push ax
 	call hex_to_string
-	xchg ah,al			; print AH
+	xchg ah,al		; print AH
 	call print_char
-	xchg ah,al			; print AL
+	xchg ah,al		; print AL
 	call print_char
 	pop ax
 	ret
@@ -279,29 +279,29 @@ read_blocks_to_buffer:
 	; Read CCCC blocks from address BBBB and load to block buffer address (0x9000).
 	push bx
 	call print_new_line
-	mov bx,[0x7e10]						; BBBB block address
-	mov ax,[0x8000]						; CCCC number of blocks
+	mov bx,[0x7e10]			; BBBB block address
+	mov ax,[0x8000]			; CCCC number of blocks
 
 	; Disk Address Packer (DAP)
-	mov word [0x8100],0x0010		; DAP data size, and unsed byte
-	mov [0x8102],ax					; number of sectors to read
-	mov word [0x8104],0x9000		; buffer segment and offset 
-	mov word [0x8106],0				; buffer segment and offset 
-	mov dword [0x8108],0			; LBA address high 4-bytes
-	mov dword [0x810c],0			; LBA address low 4-bytes
-	mov [0x8108],bl					; LBA address low bytes
-	mov [0x8109],bh					; LBA address low bytes
+	mov word [0x8100],0x0010	; DAP data size, and unsed byte
+	mov [0x8102],ax			; number of sectors to read
+	mov word [0x8104],0x9000	; buffer offset (little-endian)
+	mov word [0x8106],0		; buffer segment (little-endian)
+	mov dword [0x8108],0		; LBA address clear high 4-bytes
+	mov dword [0x810c],0		; LBA address clear low 4-bytes
+	mov [0x8108],bl			; LBA address set 16-bit low byte
+	mov [0x8109],bh			; LBA address set 16-bit high byte
 
 	; read disk
 	mov dl,[0x8004]		; disk number
 	xor ax,ax
-	mov ds,ax			; DAP segment
-	mov si,0x8005		; DAP offset
-	mov ah,42h			; BIOS extended disk read
+	mov ds,ax		; DAP segment
+	mov si,0x8100		; DAP offset
+	mov ah,42h		; BIOS extended disk read
 	int 13h
 	jnc .done
 	xchg ah,al
-	call print_byte_hex		; print error code
+	call print_byte_hex	; print error code
 
 	.done:
 	pop bx
