@@ -24,11 +24,10 @@ org 0x7c00			; the address that BIOS loads MBR
 
 	mov [0x8004],dl		; save boot drive number
 
-	xor eax,eax
+	xor ax,ax
 	mov sp,ax		; base of stack memory
 	mov ax,0x8000		; start of stack memory
 	mov ss,ax
-
 
 start:
 	call print_new_line
@@ -48,9 +47,14 @@ read_commnad:
 	jne .is_full
 	cmp bx,0
 	je .read_char
+	call print_char
+	mov al,' '
+	call print_char		; delete last char
+	mov al,08h
+	call print_char		; move cursor
 	dec bx
-	mov byte [0x7e00+bx],0	; delete last char
-	call print_command
+	mov byte [0x7e00+bx],0	; delete last char from buffer
+	;call print_command
 	jmp .read_char
 	.is_full:
 	cmp bx,16
@@ -65,24 +69,25 @@ read_commnad:
 	pop bx
 	ret
 
-print_command:
-	push bx
-	call print_new_line
-	mov al,'>'		; prompt for a command
-	call print_char
-	mov bx,0
-	.next_char:
-	mov al,[0x7e00+bx]
-	cmp al,0		; end of string
-	je .done
-	cmp bx,15		; buffer is full
-	je .done
-	call print_char
-	inc bx
-	jmp .next_char
-	.done:
-	pop bx
-	ret
+; Removed because no space left in MBR block
+; print_command:
+; 	push bx
+; 	call print_new_line
+; 	mov al,'>'		; prompt for a command
+; 	call print_char
+; 	mov bx,0
+; 	.next_char:
+; 	mov al,[0x7e00+bx]
+; 	cmp al,0		; end of string
+; 	je .done
+; 	cmp bx,15		; buffer is full
+; 	je .done
+; 	call print_char
+; 	inc bx
+; 	jmp .next_char
+; 	.done:
+; 	pop bx
+; 	ret
 
 print_new_line:
 	push ax
@@ -173,14 +178,25 @@ run_command:
 	call parse_command_address
 	call parse_command_block_count
 	mov al,[0x7e00]
-	cmp al,'e'		; edit mode
+	cmp al,'e'		; edit blocks
 	jne .is_read
 	call edit_block_buffer
 	.is_read:
 	cmp al,'r'		; read blocks
 	jne .is_write
-	call read_blocks_to_buffer
+	mov ax,4200h
+	call read_or_write_blocks
 	.is_write:
+	cmp al,'w'		; write blocks
+	jne .is_exec
+	mov ax,4300h
+	call read_or_write_blocks
+	.is_exec:
+	cmp al,'x'		; execute code in block buffer
+	jne .done
+	call print_new_line
+	call 0x9000
+	.done:
 	pop bx
 	ret
 
@@ -275,11 +291,26 @@ edit_block_buffer:
 	pop bx
 	ret
 
-read_blocks_to_buffer:
-	; Read CCCC blocks from address BBBB and load to block buffer address (0x9000).
+read_or_write_blocks:
+	; Read/Write CCCC blocks from/to address BBBB. IO buffer starts at 0x9000.
+	; AH: 42h read blocks
+	; AH: 43h write blocks
+	;   AL: bit 0 = 0: close write check
+	;   AL: bit 0 = 1: open write check
+	;   AL: bit 1-7: reserved, set to 0
+
 	push bx
-	call print_new_line
 	mov bx,[0x7e10]			; BBBB block address
+
+	; protect from overwriting MBR block
+	cmp bx,0		; is MBR
+	jne .not_mbr
+	mov al,'E'		; E - error
+	call print_char
+	jmp .done
+	.not_mbr:
+
+	push ax
 	mov ax,[0x8000]			; CCCC number of blocks
 
 	; Disk Address Packer (DAP)
@@ -292,14 +323,15 @@ read_blocks_to_buffer:
 	mov [0x8108],bl			; LBA address set 16-bit low byte
 	mov [0x8109],bh			; LBA address set 16-bit high byte
 
-	; read disk
+	; read/write disk
 	mov dl,[0x8004]		; disk number
 	xor ax,ax
 	mov ds,ax		; DAP segment
 	mov si,0x8100		; DAP offset
-	mov ah,42h		; BIOS extended disk read
+	pop ax
 	int 13h
 	jnc .done
+	call print_new_line
 	xchg ah,al
 	call print_byte_hex	; print error code
 
@@ -307,8 +339,6 @@ read_blocks_to_buffer:
 	pop bx
 	ret
 
-times 510-($-$$) db 0	; pad to 512 bytes
+times 510-($-$$) db 0		; pad to 512 bytes
 
 dw 0xaa55			; MBR signature for BIOS
-
-times 512 db 0xef	; second sector for read test
