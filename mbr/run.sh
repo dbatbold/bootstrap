@@ -10,8 +10,6 @@ if ! which $DEP >/dev/null; then
 fi
 
 qemu-system-x86_64 \
-	-m 1G \
 	-cpu host \
 	-enable-kvm \
-	-display sdl \
 	-drive format=raw,file=mbr.bin
