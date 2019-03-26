@@ -1,8 +1,8 @@
 ; x86 bootloader for bootstrap
 ;
 ; The code generates 512-byte Master Boot Rector (MBR)
-; for booting x86 based PCs, and prompts the user to run
-; read, edit, write and execute commands on disk blocks.
+; for booting x86 based PCs, and prompts the user to
+; read, edit, write and execute commands on boot disk blocks.
 ;
 ; To build, install one of FASM, YASM, NASM assembler, and run:
 ; $ ./build.sh
@@ -15,35 +15,37 @@
 ; $ ./run.sh
 ;
 ; DL - register receives the boot drive number from BIOS
-; 0x7e00 - address of free memory can be used
+; 0x7e00 - address of free memory can be used by bootloader
 ;
 ; Command format:
-;  rBBBBCCCC - read CCCC blocks from block address BBBB
-;  eBBBB     - edit 0x9000 block buffer starting from offset BBBB
-;  wBBBBCCCC - write CCCC blocks from 0x9000 to block address BBBB
-;  x         - execute code in block buffer (0x9000)
+;  rBBBBCCCC - read CCCC number of blocks from LBA disk address BBBB
+;  eBBBB     - edit transfer buffer starting from offset BBBB
+;  wBBBBCCCC - write CCCC number of blocks from transfer buffer to disk LBA BBBB
+;  x         - execute code in transfer buffer (0x9000)
 ;
 ; Rules:
 ;  - Hex address and block count must be entered in lower case [0-9][a-f])
 ;  - Hex numbers are not validated for correctness due to code size limit
 ;  - Only supports reading and writing the boot drive
-;  - Reading and writing MBR block is not allowed
+;  - Reading or writing the MBR block is not allowed
 ;
 ; Examples:
 ;  >r0001000f - Reads 16 blocks starting from the second sector
-;               to memory address 0x9000.
+;               to transfer buffer address 0x9000.
 ;  >e000f     - Edit bytes starting from address 0x900f (offset 15)
-;  >w0002001e - Writes 30 blocks starting from the third sector on boot drive.
+;  >w0002001e - Writes 30 blocks starting from the third sector to the boot drive.
 ;  >x         - Execute code starting from address 0x9000.
 ;
 ; Memory map:
-;  0x7e00  16 bytes - command input buffer
-;  0x7e10   2 bytes - BBBB command address parsed from input buffer
-;  0x8000   2 bytes - CCCC number of blocks parsed from input buffer
-;  0x8002   2 bytes - byte hex buffer used for editor
-;  0x8004   1 bytes - boot drive number (from DL)
-;  0x8fff           - bottom of the stack memory
-;  0x9000 64K bytes - block buffer for read, edit, write and execute commands
+;  0x7e00    16 bytes - command input buffer
+;  0x7e10     2 bytes - BBBB command address parsed from the input buffer
+;  0x8000     2 bytes - CCCC number of blocks parsed from the input buffer
+;  0x8002     2 bytes - byte hex buffer used for editor
+;  0x8004     1 byte  - BIOS boot drive number (from DL)
+;  0x8005  4090 bytes - end of the stack memory
+;  0x8fff             - beginning of the stack memory (grows upward)
+;  0x9000 28671 bytes - transfer buffer for read, edit, write and execute commands
+;  0xffff             - end of the segment
 
 BASE		equ 0x7c00	; segment offset that MBR is loaded
 CMDBUF		equ 0x7e00	; command input buffer
