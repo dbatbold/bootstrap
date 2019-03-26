@@ -46,6 +46,7 @@
 ;  0x9000 64K bytes - block buffer for read, edit, write and execute commands
 
 BASE		equ 0x7c00	; segment offset that MBR is loaded
+CMDBUF		equ 0x7e00	; command input buffer
 BBBB		equ 0x7e10	; command address
 CCCC		equ 0x8000	; number of blocks
 HEXBUF		equ 0x8002	; hex buffer
@@ -61,7 +62,7 @@ org BASE
 	mov ss,ax		; clear stack segment
 	mov sp,STACK		; set stack pointer
 
-	call init
+	call init_regs		; initialize segment registers
 
 times 13-($-$$) nop		; align offset to the previous version on tape
 
@@ -89,7 +90,7 @@ read_commnad:
 	mov al,08h
 	call print_char		; move cursor
 	dec bx
-	mov byte [0x7e00+bx],0	; delete last char from buffer
+	mov byte [CMDBUF+bx],0	; delete last char from buffer
 	;call print_command
 	jmp .read_char
   .is_full:
@@ -97,7 +98,7 @@ read_commnad:
 	je .read_char		; buffer is full
 	cmp al,0dh		; Enter key
 	je .done
-	mov [0x7e00+bx],al
+	mov [CMDBUF+bx],al
 	inc bx
 	call print_char
 	jmp .read_char
@@ -113,7 +114,7 @@ read_commnad:
 ; 	call print_char
 ; 	mov bx,0
 ;  .next_char:
-; 	mov al,[0x7e00+bx]
+; 	mov al,[CMDBUF+bx]
 ; 	cmp al,0		; end of string
 ; 	je .done
 ; 	cmp bx,15		; buffer is full
@@ -213,7 +214,7 @@ run_command:
 	xor bx,bx
 	call parse_command_address
 	call parse_command_block_count
-	mov al,[0x7e00]
+	mov al,[CMDBUF]
 	cmp al,'e'		; edit blocks
 	jne .is_read
 	call edit_block_buffer
@@ -228,7 +229,7 @@ run_command:
 	jne .is_exec
 	mov ax,4300h
 	call read_or_write_blocks
-;	call write_blocks
+;	call write_blocks	; test CHS address
 	jmp .done
   .is_exec:
 	cmp al,'x'		; execute code in block buffer
@@ -341,32 +342,13 @@ read_or_write_blocks:
  	push bx
  	mov bx,[BBBB]		; BBBB block address
  
- 	; push ax
- 	; mov al,bh
- 	; call print_byte_hex
- 	; mov al,bl
- 	; call print_byte_hex
- 	; pop ax
- 
  	; protect from overwriting MBR block
  	cmp bx,0		; is MBR?
  	jne .write
-;	jne .build_dap
  	mov al,'M'
  	call print_char
  	jmp .done
  
- 	; build Disk Address Packet (DAP) in stack
-;  .build_dap:
-; 	push dword 0		; ^                                  (+4)
-; 	push word 0		; |                                  (+2)
-; 	push word bx		; LBA 8-byte address                 (+2)
-; 	push word 0x0000	; buffer memory segment              (+2)
-; 	push word BUFFER	; buffer memory offset               (+2)
-; 	push word [CCCC]	; number of sectors to read/write    (+2)
-; 	push word 0x1000	; DAP struct size (plus unused byte) (+2)
-; 	mov si,sp		; store DAP address                  (=16)
-
    .write:
 	push ax
 	mov ax,[CCCC]
@@ -376,7 +358,6 @@ read_or_write_blocks:
  	mov si,DAP		; address of DAP
  	mov dl,[DRIVE]		; disk number
  	int 13h
-; 	add sp,0x10		; remove DAP from stack
  	jnc .done
   .print_result:
  	call print_new_line
@@ -386,8 +367,8 @@ read_or_write_blocks:
  	pop bx
  	ret
 
-; write sectors to disk use CHS address
 ; write_blocks:
+;	; Try writing sectors to disk usng (old) CHS address
 ; 	push ax
 ; 	push bx
 ; 	push cx
@@ -396,9 +377,9 @@ read_or_write_blocks:
 ; 	xor ax,ax
 ; 	mov es,ax		; buffer segment
 ; 	mov bx,BUFFER		; buffer offset
-; 	mov ch,0		; cylinder (0-1023)
-; 	mov cl,2		; sector (1-63)
-; 	mov dh,0		; head (0-15)
+; 	mov ch,0		; cylinder (0-1023) (C)
+; 	mov dh,0		; head (0-15)       (H)
+; 	mov cl,2		; sector (1-63)     (S)
 ; 	mov dl,[DRIVE]		; drive
 ; 	mov al,1		; number of sectors
 ; 	mov ah,03h		; write to disk
@@ -415,7 +396,7 @@ read_or_write_blocks:
 ; 	pop ax
 ; 	ret
 
-init:
+init_regs:
 	; initialize segments
 	;cli			; disable hardware interrupts
 	cld			; clear direction flag
@@ -423,10 +404,10 @@ init:
 	mov ds,ax		; clear data segment
 	mov si,ax		; clear source index
 	mov es,ax		; clear extra segment
-	sti			; enable interrupts
+	sti			; enable hardware interrupts
 	ret
 
-DAP:
+DAP:				; Data Access Packet for read and write disk
 	db	0x10		; DAP data size (16)
 	db	0		; unused
 DAP_NUM_SECTORS:
