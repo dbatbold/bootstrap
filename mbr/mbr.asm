@@ -22,6 +22,7 @@
 ;  eBBBB     - edit transfer buffer starting from offset BBBB
 ;  wBBBBCCCC - write CCCC number of blocks from transfer buffer to disk LBA BBBB
 ;  x         - execute code in transfer buffer (0x9000)
+;  dDDDD     - change drive number to 0xDDDD
 ;
 ; Rules:
 ;  - Hex address and block count must be entered in lower case [0-9][a-f])
@@ -33,8 +34,9 @@
 ;  >r0001000f - Reads 16 blocks starting from the second sector
 ;               to transfer buffer address 0x9000.
 ;  >e000f     - Edit bytes starting from address 0x900f (offset 15)
-;  >w0002001e - Writes 30 blocks starting from the third sector to the boot drive.
-;  >x         - Execute code starting from address 0x9000.
+;  >w0002001e - Writes 30 blocks starting from the third sector to the boot drive
+;  >x         - Execute code starting from address 0x9000
+;  >d0081     - Change drive number to 0x81h (second drive)
 ;
 ; Memory map:
 ;  0x7e00    16 bytes - command input buffer
@@ -58,16 +60,21 @@ BUFFER		equ 0x9000	; buffer for disk read, write and execute commands
 
 use16				; 16-bit code
 org BASE
+
+	mov [DRIVE],dl		; save boot drive number
 	
 	; setup stack memory
 	xor ax,ax		; clear AX
 	mov ss,ax		; clear stack segment
 	mov sp,STACK		; set stack pointer
 
-	call init_regs		; initialize segment registers
-
-times 13-($-$$) nop		; align offset to the previous version on tape
-
+	; initialize segments
+	;cli			; disable hardware interrupts
+	cld			; clear direction flag
+	mov ds,ax		; clear data segment
+	mov si,ax		; clear source index
+	mov es,ax		; clear extra segment
+	;sti			; enable hardware interrupts
 start:
 	call print_new_line
 	mov al,'>'		; prompt for a command
@@ -235,9 +242,13 @@ run_command:
 	jmp .done
   .is_exec:
 	cmp al,'x'		; execute code in block buffer
-	jne .done
+	jne .is_drive
 	call print_new_line
 	call BUFFER
+  .is_drive:
+	cmp al,'d'		; change drive number
+	jne .done
+	call change_drive_number
   .done:
 	pop bx
 	ret
@@ -345,17 +356,17 @@ read_or_write_blocks:
  	mov bx,[BBBB]		; BBBB block address
  
  	; protect from overwriting MBR block
- 	cmp bx,0		; is MBR?
+ 	cmp bx,0		; is MBR block?
  	jne .write
- 	mov al,'M'
- 	call print_char
- 	jmp .done
+ 	mov al,[DRIVE]
+ 	cmp ax,4380h		; writing to boot drive?
+	je .print_result	; do not overwrite MBR
  
    .write:
 	push ax
 	mov ax,[CCCC]
-	mov [DAP_NUM_SECTORS],ax
-	mov [DAP_LBA],bx
+	mov [DAP.NUM_SECTORS],ax
+	mov [DAP.LBA],bx
 	pop ax
  	mov si,DAP		; address of DAP
  	mov dl,[DRIVE]		; disk number
@@ -398,26 +409,21 @@ read_or_write_blocks:
 ; 	pop ax
 ; 	ret
 
-init_regs:
-	; initialize segments
-	;cli			; disable hardware interrupts
-	cld			; clear direction flag
-	mov [DRIVE],dl		; save boot drive number
-	mov ds,ax		; clear data segment
-	mov si,ax		; clear source index
-	mov es,ax		; clear extra segment
-	sti			; enable hardware interrupts
+change_drive_number:
+ 	mov ax,[BBBB]		; BBBB block address
+	mov [DRIVE],al		; change drive
+  	call print_new_line
+  	call print_byte_hex	; print current drive number
 	ret
 
 DAP:				; Data Access Packet for read and write disk
 	db	0x10		; DAP data size (16)
 	db	0		; unused
-DAP_NUM_SECTORS:
+   .NUM_SECTORS:
 	dw	0		; number of sectors to read/write
-DAP_BUFFER:
 	dw	BUFFER		; transfer buffer offset to read/write
 	dw	0		; transfer buffer segment
-DAP_LBA:
+   .LBA:
 	dd	0		; LBA address (0-31 bits)
 	dd	0		; LBA address (32-63 bits)
 
