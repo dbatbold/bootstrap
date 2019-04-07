@@ -62,6 +62,7 @@ use16				; 16-bit code
 org BASE
 
 	mov [DRIVE],dl		; save boot drive number
+				; (DL is not passed in some BIOS!)
 	
 	; setup stack memory
 	xor ax,ax		; clear AX
@@ -100,7 +101,6 @@ read_commnad:
 	call print_char		; move cursor
 	dec bx
 	mov byte [CMDBUF+bx],0	; delete last char from buffer
-	;call print_command
 	jmp .read_char
   .is_full:
 	cmp bx,16
@@ -114,26 +114,6 @@ read_commnad:
   .done:
 	pop bx
 	ret
-
-; Removed because no space left in MBR block
-; print_command:
-; 	push bx
-; 	call print_new_line
-; 	mov al,'>'		; prompt for a command
-; 	call print_char
-; 	mov bx,0
-;  .next_char:
-; 	mov al,[CMDBUF+bx]
-; 	cmp al,0		; end of string
-; 	je .done
-; 	cmp bx,15		; buffer is full
-; 	je .done
-; 	call print_char
-; 	inc bx
-; 	jmp .next_char
-;  .done:
-; 	pop bx
-; 	ret
 
 print_new_line:
 	push ax
@@ -238,7 +218,6 @@ run_command:
 	jne .is_exec
 	mov ax,4300h
 	call read_or_write_blocks
-;	call write_blocks	; test CHS address
 	jmp .done
   .is_exec:
 	cmp al,'x'		; execute code in block buffer
@@ -379,35 +358,6 @@ read_or_write_blocks:
   .done:
  	pop bx
  	ret
-
-; write_blocks:
-;	; Try writing sectors to disk usng (old) CHS address
-; 	push ax
-; 	push bx
-; 	push cx
-; 	push dx
-; 
-; 	xor ax,ax
-; 	mov es,ax		; buffer segment
-; 	mov bx,BUFFER		; buffer offset
-; 	mov ch,0		; cylinder (0-1023) (C)
-; 	mov dh,0		; head (0-15)       (H)
-; 	mov cl,2		; sector (1-63)     (S)
-; 	mov dl,[DRIVE]		; drive
-; 	mov al,1		; number of sectors
-; 	mov ah,03h		; write to disk
-; 	int 13h
-;  	jnc .done
-;  	call print_new_line
-;  	xchg ah,al
-;  	call print_byte_hex	; print error code
-; 
-;   .done:
-; 	pop dx
-; 	pop cx
-; 	pop bx
-; 	pop ax
-; 	ret
 
 change_drive_number:
  	mov ax,[BBBB]		; BBBB block address
