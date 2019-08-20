@@ -2,7 +2,7 @@
 
 ASM="fasm nasm yasm"
 
-rm mbr.bin 2>/dev/null || true
+test ! -f mbr.bin || rm mbr.bin
 
 for asm in $ASM; do
 	if which $asm >/dev/null; then

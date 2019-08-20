@@ -1,1 +1,6 @@
 set ts=8 sw=8 sts=8
+
+set makeprg=fasm
+set efm=%f\ \[%l\]:
+
+noremap <leader>fa :make % 2>&1<cr>

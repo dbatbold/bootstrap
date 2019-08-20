@@ -28,7 +28,7 @@
 ;  - Hex address and block count must be entered in lower case [0-9][a-f])
 ;  - Hex numbers are not validated for correctness due to code size limit
 ;  - Only supports reading and writing the boot drive
-;  - Reading or writing the MBR block is not allowed
+;  - Writing to MBR block on boot driver is not allowed
 ;
 ; Examples:
 ;  >r0001000f - Reads 16 blocks starting from the second sector
