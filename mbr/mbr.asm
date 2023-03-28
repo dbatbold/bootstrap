@@ -1,6 +1,6 @@
 ; x86 bootloader for bootstrap
 ;
-; The code generates 512-byte Master Boot Rector (MBR)
+; The code generates 512-byte Master Boot Sector (MBR)
 ; for booting x86 based PCs, and prompts the user to
 ; read, edit, write and execute commands on boot disk blocks.
 ;
